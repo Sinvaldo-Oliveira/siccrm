@@ -49,10 +49,15 @@ const schema = z.object({
   INTERNAL_CRON_SECRET: z.string().optional().default(""),
 
   // Encryption keys (pgcrypto)
-  CPF_ENCRYPTION_KEY: required("CPF_ENCRYPTION_KEY"),
+  // CPF_ENCRYPTION_KEY: nenhum código TypeScript lê esta variável hoje — a
+  // cifra de CPF em produção passa pela RPC `encrypt_cpf` (lib/contacts/cpf.ts),
+  // que degrada sozinha (guarda só o hash) quando a RPC não está provisionada.
+  // Exigi-la aqui bloqueava o boot por uma chave que o app nem consome.
+  CPF_ENCRYPTION_KEY: z.string().optional().default(""),
   // Opcional (template genérico) — só necessária ao ligar NUVEMSHOP_ENABLED.
   NUVEMSHOP_OAUTH_ENCRYPTION_KEY: z.string().optional().default(""),
-  WAHA_BYO_ENCRYPTION_KEY: required("WAHA_BYO_ENCRYPTION_KEY"),
+  // Mesmo motivo do CPF_ENCRYPTION_KEY acima: nenhum código a lê hoje.
+  WAHA_BYO_ENCRYPTION_KEY: z.string().optional().default(""),
   /**
    * AES-256-GCM key (32 bytes em base64) usada pra cifrar API keys em
    * `ai_provider_credentials`. Em produção é obrigatória; em dev a default vazia
@@ -64,10 +69,14 @@ const schema = z.object({
   // instaláveis (import/install) usam `pg` cru (mesmo pool do agent-engine).
   SUPABASE_DB_URL: required("SUPABASE_DB_URL"),
 
-  // WAHA
-  WAHA_API_BASE_URL: required("WAHA_API_BASE_URL"),
-  WAHA_API_KEY: required("WAHA_API_KEY"),
-  WAHA_WEBHOOK_BASE_URL: required("WAHA_WEBHOOK_BASE_URL"),
+  // WAHA — opcional mesmo em produção desde que a Evolution API virou motor
+  // alternativo de primeira classe: uma instalação que só usa Evolution não
+  // pode ficar bloqueada no boot por env de um transporte que não usa.
+  // `getWahaClient()` já trata ausência como "não configurado" (retorna null,
+  // NOOP), não como erro — a validação aqui só precisava acompanhar isso.
+  WAHA_API_BASE_URL: z.string().optional().default(""),
+  WAHA_API_KEY: z.string().optional().default(""),
+  WAHA_WEBHOOK_BASE_URL: z.string().optional().default(""),
   // Segredo com que o WAHA assina os webhooks. O compose já o entrega ao
   // contêiner do WAHA; o app precisa dele para CONFERIR a assinatura — e não o
   // declarava aqui, então nunca teve como verificar nada.
@@ -86,9 +95,13 @@ const schema = z.object({
   EVOLUTION_API_BASE_URL: z.string().optional().default(""),
   EVOLUTION_API_KEY: z.string().optional().default(""),
 
-  // Upstash Redis
-  UPSTASH_REDIS_REST_URL: required("UPSTASH_REDIS_REST_URL"),
-  UPSTASH_REDIS_REST_TOKEN: required("UPSTASH_REDIS_REST_TOKEN"),
+  // Upstash Redis — opcional mesmo em produção: `getRedis()` (lib/ai/dispatcher/
+  // rate-limit.ts) já cai para um limitador em memória com aviso, e login/
+  // dispatch de IA reusam esse caminho. Sem Redis o rate limit vale só por
+  // instância (não é seguro em multi-instância) — recomendado configurar em
+  // produção de verdade, mas não pode travar o boot de quem ainda não tem.
+  UPSTASH_REDIS_REST_URL: z.string().optional().default(""),
+  UPSTASH_REDIS_REST_TOKEN: z.string().optional().default(""),
 
   // AI providers — env-gated. Worker no-ops with skip="ai_gateway_key_missing"
   // when AI_GATEWAY_API_KEY is absent, so production boot must not be fatal.
