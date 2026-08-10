@@ -128,6 +128,24 @@ export class WahaClient {
   }
 
   /**
+   * Imagem PNG do QR de pareamento — o mesmo endpoint que
+   * `app/api/v1/channel-sessions/[id]/qr/route.ts` sempre proxied direto
+   * (medido em produção). `null` em qualquer resposta não-ok: o chamador não
+   * distingue "ainda não ficou pronto" de outro estado a partir só do status
+   * HTTP do WAHA — a rota antiga também não distinguia, só repassava.
+   */
+  async getQrImage(name: string): Promise<{ buffer: Buffer; contentType: string } | null> {
+    const res = await fetch(
+      `${this.baseUrl}/api/${encodeURIComponent(name)}/auth/qr?format=image`,
+      { headers: { "X-Api-Key": this.apiKey }, cache: "no-store" },
+    );
+    if (!res.ok) return null;
+    const contentType = res.headers.get("content-type") ?? "image/png";
+    const buffer = Buffer.from(await res.arrayBuffer());
+    return { buffer, contentType };
+  }
+
+  /**
    * URL da foto de perfil do contato, ou null.
    *
    * NÃO lança quando falha: contato sem foto, com privacidade fechada ou

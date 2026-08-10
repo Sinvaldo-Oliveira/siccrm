@@ -538,6 +538,23 @@ describe("GET /api/v1/channel-sessions/[id]/qr — o QR é o ato de religar", ()
   beforeEach(() => {
     process.env.WAHA_API_BASE_URL = "http://waha.local";
     process.env.WAHA_API_KEY = "chave-de-teste";
+    // A rota passou a resolver o QR pelo adapter (`getAdapter(provider).getQrCode`),
+    // que fala com `WahaClient.getQrImage` em vez de `fetch` cru — mesmo
+    // contrato do método real, ainda passando pelo `fetch` espiado abaixo para
+    // as asserções de URL/headers continuarem válidas.
+    vi.mocked(getWahaClient).mockReturnValue({
+      getQrImage: async (name: string) => {
+        const res = await fetch(
+          `${process.env.WAHA_API_BASE_URL}/api/${encodeURIComponent(name)}/auth/qr?format=image`,
+          { headers: { "X-Api-Key": process.env.WAHA_API_KEY! }, cache: "no-store" },
+        );
+        if (!res.ok) return null;
+        return {
+          buffer: Buffer.from(await res.arrayBuffer()),
+          contentType: res.headers.get("content-type") ?? "image/png",
+        };
+      },
+    } as never);
   });
 
   it("⭐ canal ARQUIVADO → 409 e o WAHA nem é consultado", async () => {

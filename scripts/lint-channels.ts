@@ -40,6 +40,9 @@ const ALLOWED = [
   /^lib\/channels\//,
   // O transporte que o adapter embrulha; some quando a Fase 3 o absorver.
   /^lib\/waha\//,
+  // Mesma razão do `lib/waha/` acima: o transporte HTTP da Evolution API, não
+  // uma feature perguntando identidade.
+  /^lib\/evolution\//,
   // Saída de `supabase gen types`: os nomes são COLUNAS. Editar à mão é o defeito.
   /^lib\/database\.types\.ts$/,
 ];
@@ -150,6 +153,7 @@ const KNOWN_DEBT: { reason: string; files: string[] }[] = [
       "app/api/v1/ai/agents/[id]/versions/[vid]/test/route.ts",
       "app/api/v1/conversations/[id]/media/route.ts",
       "app/api/v1/webhook-sources/route.ts",
+      "app/api/v1/webhooks/evolution/[token]/route.ts",
       "app/api/v1/webhooks/in/[token]/route.ts",
       "app/app/ai/agents/[id]/_components/TestPanel.tsx",
       "components/inbox/media/media-utils.ts",

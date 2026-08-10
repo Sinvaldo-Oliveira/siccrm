@@ -79,6 +79,13 @@ const schema = z.object({
   // assine — aí a verificação passa a ser obrigatória.
   WAHA_WEBHOOK_REQUIRE_SIGNATURE: z.string().optional().default("false"),
 
+  // Evolution API — motor alternativo ao WAHA (mesmo desenho: BYO de UMA
+  // instalação inteira, não credencial por sessão). Opcional sempre, mesmo em
+  // produção: quem não usa deixa vazio e nada muda (ChannelAdapter.isConfigured
+  // resolve para false, a UI não oferece o motor).
+  EVOLUTION_API_BASE_URL: z.string().optional().default(""),
+  EVOLUTION_API_KEY: z.string().optional().default(""),
+
   // Upstash Redis
   UPSTASH_REDIS_REST_URL: required("UPSTASH_REDIS_REST_URL"),
   UPSTASH_REDIS_REST_TOKEN: required("UPSTASH_REDIS_REST_TOKEN"),

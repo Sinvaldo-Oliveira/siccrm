@@ -24,7 +24,13 @@ import { audit } from "@/lib/audit";
 import { ok, fail } from "@/lib/api/wrappers";
 import { loadAuthUser, resolveActiveOrg } from "@/lib/auth/server";
 import { requireRole } from "@/lib/auth/require-role";
-import { CHANNEL_PROVIDER_WAHA } from "@/lib/channels/capabilities";
+import {
+  CHANNEL_PROVIDER_WAHA,
+  DEFAULT_CHANNEL_PROVIDER,
+  getAdapter,
+  pairingRefColumn,
+  type ChannelProvider,
+} from "@/lib/channels";
 import { isChannelStatus } from "@/lib/schemas/channels";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -134,7 +140,7 @@ export async function GET(
   const supabase = await createClient();
   const { data: session } = await supabase
     .from("channel_sessions")
-    .select("id, provider, waha_session_name, display_name, phone_number, status")
+    .select("id, provider, waha_session_name, evolution_instance_name, display_name, phone_number, status")
     .eq("organization_id", activeOrg.orgId)
     .eq("id", id)
     .maybeSingle();
@@ -147,12 +153,15 @@ export async function GET(
   const comImpacto = <T extends object>(corpo: T): T & { deletion_impact?: ChannelDeletionImpact } =>
     impact ? { ...corpo, deletion_impact: impact } : corpo;
 
-  const waha = getWahaClient();
-  // Canal oficial não tem sessão no transporte para consultar — `waha_session_name`
-  // é NULL nele por CHECK, e perguntar assim mesmo pediria `/api/sessions/null`.
-  const nomeSessao =
-    session.provider === CHANNEL_PROVIDER_WAHA ? session.waha_session_name : null;
-  if (!waha || !nomeSessao) {
+  const provider = (session.provider ?? DEFAULT_CHANNEL_PROVIDER) as ChannelProvider;
+  const adapter = getAdapter(provider);
+  const refColumn = pairingRefColumn(provider);
+  // Canal oficial (e qualquer provider sem pareamento por QR) não tem sessão no
+  // transporte para consultar — `refColumn` é null e `checkLiveStatus` não existe.
+  const sessionRef = refColumn
+    ? (session as Record<string, unknown>)[refColumn] as string | null
+    : null;
+  if (!adapter.checkLiveStatus || !adapter.isConfigured() || !sessionRef) {
     // Nada a checar ao vivo (transporte fora do ar, ou canal que não vive nele):
     // devolve o que está no DB, sinalizando que o estado não foi confirmado agora.
     return ok(comImpacto({ ...session, waha_configured: false }), { requestId });
@@ -160,21 +169,9 @@ export async function GET(
 
   let liveStatus = session.status as string;
   let phoneNumber = session.phone_number as string | null;
-  try {
-    const remote = (await waha.getSessionQr(nomeSessao)) as {
-      status?: string;
-      me?: { id?: string; pushName?: string };
-    };
-    if (remote.status) liveStatus = remote.status;
-    // WAHA expõe o número (JID `<phone>@c.us`) quando a sessão está WORKING.
-    const jid = remote.me?.id;
-    if (jid && !phoneNumber) phoneNumber = jid.replace(/@.*/, "");
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "unknown";
-    // 404 no WAHA = sessão não iniciada lá → considera STOPPED.
-    if (msg.includes("404")) liveStatus = "STOPPED";
-    // outros erros: mantém o status do DB (não sobrescreve com ruído transitório).
-  }
+  const live = await adapter.checkLiveStatus({ sessionRef });
+  if (live.status) liveStatus = live.status;
+  if (live.phoneNumber && !phoneNumber) phoneNumber = live.phoneNumber;
 
   // Sincroniza o DB: sempre carimba o health check; atualiza status/telefone só se válido.
   const checkedAt = new Date().toISOString();

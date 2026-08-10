@@ -12,6 +12,15 @@ export interface ChannelSession {
    * canal oficial rendia rótulo vazio onde a tela concatenava esse campo.
    */
   waha_session_name: string | null;
+  /**
+   * Nome da instância no motor alternativo, quando `provider` é esse motor.
+   * Opcional (e não `| null` puro): fixtures de teste anteriores a este campo
+   * não o setam, e exigir presença quebraria todas sem acrescentar segurança —
+   * a tela só lê, nunca decide por ele.
+   */
+  evolution_instance_name?: string | null;
+  /** Vocabulário aberto — a tela não decide nada por ele, só exibe/envia de volta. */
+  provider?: string | null;
   display_name: string | null;
   phone_number: string | null;
   status: string;

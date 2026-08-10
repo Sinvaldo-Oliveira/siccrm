@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { requireAuth, resolveActiveOrg } from "@/lib/auth/server";
 import { ROLE_RANK } from "@/lib/auth/types";
+import { CHANNEL_PROVIDER_EVOLUTION, getAdapter } from "@/lib/channels";
 import { ConexoesShell } from "@/components/connections/ConexoesShell";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +19,7 @@ export default async function ConnectionsPage() {
   const wahaConfigured = Boolean(
     process.env.WAHA_API_BASE_URL && key && key !== "dev_plaintext_change_me",
   );
+  const evolutionConfigured = getAdapter(CHANNEL_PROVIDER_EVOLUTION).isConfigured();
 
   return (
     <div className="flex h-full flex-col gap-6 p-6">
@@ -28,7 +30,7 @@ export default async function ConnectionsPage() {
           da Meta, e acompanhe a saúde de cada um.
         </p>
       </header>
-      <ConexoesShell wahaConfigured={wahaConfigured} />
+      <ConexoesShell wahaConfigured={wahaConfigured} evolutionConfigured={evolutionConfigured} />
     </div>
   );
 }

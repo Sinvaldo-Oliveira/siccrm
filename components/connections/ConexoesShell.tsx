@@ -30,7 +30,13 @@ import { TemplatesClient } from "./TemplatesClient";
  * apontando a aba certa, e um link colado no chat abre onde deveria. Aba que só
  * existe em `useState` transforma todo link salvo em "abre e procura de novo".
  */
-export function ConexoesShell({ wahaConfigured }: { wahaConfigured: boolean }) {
+export function ConexoesShell({
+  wahaConfigured,
+  evolutionConfigured,
+}: {
+  wahaConfigured: boolean;
+  evolutionConfigured: boolean;
+}) {
   const router = useRouter();
   const params = useSearchParams();
   const aba = params.get("aba") === "oficial" ? "oficial" : "numeros";
@@ -64,7 +70,7 @@ export function ConexoesShell({ wahaConfigured }: { wahaConfigured: boolean }) {
       </TabsList>
 
       <TabsContent value="numeros" className="mt-0">
-        <ConnectionsClient wahaConfigured={wahaConfigured} />
+        <ConnectionsClient wahaConfigured={wahaConfigured} evolutionConfigured={evolutionConfigured} />
       </TabsContent>
 
       <TabsContent value="oficial" className="mt-0">

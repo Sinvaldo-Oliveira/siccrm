@@ -35,13 +35,23 @@
 
 /**
  * Grafia separada por não-alfanumérico: `waha`, `WAHA_API_KEY`,
- * `waha_session_name`, `lib/waha/client`, `meta_cloud`, `graph.facebook.com`.
+ * `waha_session_name`, `lib/waha/client`, `meta_cloud`, `graph.facebook.com`,
+ * `evolution_api`.
  *
  * A fronteira é "não colado em alfanumérico" — deixa `_`, `/`, `.` e `-` serem
  * separadores de verdade (que `\b` não deixava) e continua ignorando `wahax` /
  * `xwaha`, onde `waha` é pedaço de outra palavra e não menção ao provider.
+ *
+ * ⚠️ O quarto provider é `evolution_api`, NUNCA o token solto `evolution`: o
+ * repo já tem uma feature sem relação nenhuma com canal (`app/app/ai/evolution/`,
+ * o Painel de Evolução do harness de IA — `EvolutionClient`, imports
+ * `lib/ai/evolution/*`) que usa essa palavra em path e identificador. Medido
+ * ao adicionar esta linha: `evolution` sozinho (SEPARADO, sem PASCAL) já
+ * acertava esses arquivos via `"@/lib/ai/evolution/aggregate"` e
+ * `/api/v1/ai/evolution`. `evolution_api` não colide com nenhum deles.
  */
-const SEPARADO = /(?<![a-zA-Z0-9])(waha|meta_cloud|zernio|graph\.facebook\.com)(?![a-zA-Z0-9])/i;
+const SEPARADO =
+  /(?<![a-zA-Z0-9])(waha|meta_cloud|zernio|evolution_api|graph\.facebook\.com)(?![a-zA-Z0-9])/i;
 
 /**
  * Grafia PascalCase dentro de identificador: `WahaClient`,
@@ -50,6 +60,17 @@ const SEPARADO = /(?<![a-zA-Z0-9])(waha|meta_cloud|zernio|graph\.facebook\.com)(
  * Case-SENSITIVE de propósito: é a transição de caixa que marca a fronteira do
  * segmento. Não seguido de minúscula/dígito exclui `Wahalla` — onde `Waha` é
  * começo de outra palavra, não segmento próprio.
+ *
+ * `Evolution` sozinho fica DE FORA da lista pelo mesmo motivo do `SEPARADO`
+ * acima (colide com `EvolutionClient`/`EvolutionPage`, feature não
+ * relacionada) — mesma decisão que já excluía `Meta` sozinho (só entra como
+ * `meta_cloud`, nunca PascalCase bare, porque "Meta" também é palavra comum
+ * demais para casar sem ruído). `EvolutionApi` seria o par PascalCase certo
+ * se um dia aparecer um `EvolutionApiClient`/`EvolutionApiAdapter` fora de
+ * `lib/channels/`; hoje nenhum identificador do canal usa essa forma (o
+ * código usa `evolutionAdapter`/`EvolutionClient` — este último por acaso
+ * TAMBÉM colidindo de nome com a feature não relacionada, sem colidir de
+ * REGEX porque PASCAL não lista "Evolution").
  */
 const PASCAL = /(Waha|Zernio)(?![a-z0-9])/;
 

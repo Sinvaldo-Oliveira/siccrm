@@ -6,6 +6,18 @@ import { toast } from "sonner";
 import type { ChannelDeletionImpact } from "@/app/api/v1/channel-sessions/[id]/route";
 import { apiClient } from "@/lib/api/client";
 import { ApiError } from "@/lib/api/types";
+/**
+ * Direto de `capabilities.ts`, e não do barrel `@/lib/channels` — o barrel
+ * também exporta os adapters (que puxam `lib/env.ts`, clients HTTP e libs de
+ * servidor); importar por ele aqui inflaria o bundle do client component com
+ * código que só roda em rota de servidor. `capabilities.ts` só tem constantes
+ * e um `import type`, então é seguro no browser.
+ */
+import {
+  CHANNEL_PROVIDER_EVOLUTION,
+  CHANNEL_PROVIDER_WAHA,
+  type ChannelProvider,
+} from "@/lib/channels/capabilities";
 import {
   channelLabel,
   useChannelSessions,
@@ -23,6 +35,13 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   ArrowsClockwise,
   CheckCircle,
@@ -69,6 +88,11 @@ function errMsg(err: unknown, fallback: string): string {
  * é revogado por credencial, sem tocar no transporte. Se algum dia uma linha
  * oficial guardar nome de sessão, o efeito é o botão exigir o serviço à toa:
  * restringe demais, nunca promete de menos.
+ *
+ * ⚠️ Só o motor padrão: a rota de reconectar ainda fala só com ele (não foi
+ * generalizada nesta rodada). Um canal do motor alternativo não mostra
+ * "Reconectar" — melhor esconder o botão do que oferecer uma ação que a rota
+ * de baixo não sabe fazer.
  */
 function dependeDoTransporte(c: ChannelSession): boolean {
   return Boolean(c.waha_session_name);
@@ -87,7 +111,13 @@ function enumerar(partes: (string | null)[]): string {
   return uteis.length > 0 ? `${uteis.join(", ")} e ${ultimo}` : ultimo;
 }
 
-export function ConnectionsClient({ wahaConfigured }: { wahaConfigured: boolean }) {
+export function ConnectionsClient({
+  wahaConfigured,
+  evolutionConfigured = false,
+}: {
+  wahaConfigured: boolean;
+  evolutionConfigured?: boolean;
+}) {
   const qc = useQueryClient();
   const {
     data: sessions,
@@ -101,19 +131,23 @@ export function ConnectionsClient({ wahaConfigured }: { wahaConfigured: boolean 
   const [qr, setQr] = useState<{ sessionId: string; title: string } | null>(null);
   const [antiBanId, setAntiBanId] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<ChannelSession | null>(null);
+  // Só existe escolha quando o motor alternativo está configurado nesta
+  // instalação — sem isso a tela se comporta exatamente como antes.
+  const [engine, setEngine] = useState(CHANNEL_PROVIDER_WAHA);
   const pacingItems = usePacingKnobs().data?.items ?? [];
+  const algumMotorConfigurado = wahaConfigured || evolutionConfigured;
 
   const invalidate = useCallback(
     () => qc.invalidateQueries({ queryKey: ["channel-sessions"] }),
     [qc],
   );
 
-  // Health check ao vivo de todos os canais — consulta o WAHA e grava
-  // last_health_check_at. É a verificação de saúde de verdade (o status do DB
-  // pode estar velho se o WAHA caiu sem emitir evento).
+  // Health check ao vivo de todos os canais — consulta o transporte de cada
+  // um e grava last_health_check_at. É a verificação de saúde de verdade (o
+  // status do DB pode estar velho se o serviço caiu sem emitir evento).
   const runHealthCheck = useCallback(
     async (list: ChannelSession[]) => {
-      if (!wahaConfigured || list.length === 0) return;
+      if (!algumMotorConfigurado || list.length === 0) return;
       setChecking(true);
       try {
         await Promise.allSettled(
@@ -124,7 +158,7 @@ export function ConnectionsClient({ wahaConfigured }: { wahaConfigured: boolean 
         setChecking(false);
       }
     },
-    [wahaConfigured, invalidate],
+    [algumMotorConfigurado, invalidate],
   );
 
   const didInitialCheck = useRef(false);
@@ -139,7 +173,7 @@ export function ConnectionsClient({ wahaConfigured }: { wahaConfigured: boolean 
     try {
       const res = await apiClient.post<{ data: ChannelSession }>(
         "/api/v1/channel-sessions",
-        {},
+        evolutionConfigured ? { provider: engine } : {},
       );
       invalidate();
       setQr({ sessionId: res.data.id, title: "Conectar novo WhatsApp" });
@@ -148,7 +182,7 @@ export function ConnectionsClient({ wahaConfigured }: { wahaConfigured: boolean 
     } finally {
       setCreating(false);
     }
-  }, [invalidate]);
+  }, [invalidate, evolutionConfigured, engine]);
 
   // Reconexão suave: a maioria das quedas é passageira (rede, container
   // reiniciado) e a credencial pareada continua boa, então o número volta sem
@@ -202,12 +236,12 @@ export function ConnectionsClient({ wahaConfigured }: { wahaConfigured: boolean 
               ? "Nenhum número conectado ainda."
               : `${list.length} ${list.length === 1 ? "número conectado" : "números conectados"}.`}
         </p>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           {list.length > 0 && (
             <Button
               variant="outline"
               size="sm"
-              disabled={checking || !wahaConfigured}
+              disabled={checking || !algumMotorConfigurado}
               onClick={() => void runHealthCheck(list)}
             >
               <ArrowsClockwise
@@ -218,7 +252,21 @@ export function ConnectionsClient({ wahaConfigured }: { wahaConfigured: boolean 
               Atualizar saúde
             </Button>
           )}
-          <Button size="sm" disabled={creating || !wahaConfigured} onClick={handleConnectNew}>
+          {/* Só aparece quando há mais de um motor disponível nesta instalação —
+              instalação com um só continua exatamente como antes, sem escolha
+              nenhuma pela frente. */}
+          {evolutionConfigured && (
+            <Select value={engine} onValueChange={(v) => setEngine(v as ChannelProvider)}>
+              <SelectTrigger className="h-8 w-40 text-xs" aria-label="Motor de conexão">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={CHANNEL_PROVIDER_WAHA}>Padrão</SelectItem>
+                <SelectItem value={CHANNEL_PROVIDER_EVOLUTION}>Meu servidor próprio</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+          <Button size="sm" disabled={creating || !algumMotorConfigurado} onClick={handleConnectNew}>
             {creating ? (
               <CircleNotch size={14} className="animate-spin" aria-hidden />
             ) : (
@@ -229,7 +277,7 @@ export function ConnectionsClient({ wahaConfigured }: { wahaConfigured: boolean 
         </div>
       </div>
 
-      {!wahaConfigured && (
+      {!algumMotorConfigurado && (
         <div className="rounded-md border border-warning bg-warning-bg p-4 text-sm text-warning-fg">
           <p className="font-medium">O serviço do WhatsApp não está configurado.</p>
           <p className="mt-1">
@@ -374,7 +422,7 @@ export function ConnectionsClient({ wahaConfigured }: { wahaConfigured: boolean 
         <QrDialog
           sessionId={qr.sessionId}
           title={qr.title}
-          wahaConfigured={wahaConfigured}
+          transporteConfigured={algumMotorConfigurado}
           onClose={() => setQr(null)}
           onConnected={handleConnected}
           onForcePair={forcePair}
@@ -535,14 +583,14 @@ function ExcluirCanalDialog({
 function QrDialog({
   sessionId,
   title,
-  wahaConfigured,
+  transporteConfigured,
   onClose,
   onConnected,
   onForcePair,
 }: {
   sessionId: string;
   title: string;
-  wahaConfigured: boolean;
+  transporteConfigured: boolean;
   onClose: () => void;
   onConnected: () => void;
   onForcePair: (sessionId: string) => Promise<void>;
@@ -553,7 +601,7 @@ function QrDialog({
   const done = useRef(false);
 
   useEffect(() => {
-    if (!wahaConfigured) return;
+    if (!transporteConfigured) return;
     let cancelled = false;
     const poll = async () => {
       try {
@@ -577,7 +625,7 @@ function QrDialog({
       cancelled = true;
       clearInterval(iv);
     };
-  }, [sessionId, wahaConfigured, onConnected]);
+  }, [sessionId, transporteConfigured, onConnected]);
 
   // O QR do WhatsApp EXPIRA — medido no WAHA, a imagem muda a cada ~20s. Carregar
   // uma vez só (o que esta tela fazia) deixava um código morto na tela: quem

@@ -51,6 +51,12 @@ describe("fronteira do padrão de nome de provider", () => {
     ["import { x } from '@/lib/waha/client'", "caminho de import"],
     ["meta_cloud", "outro provider do vocabulário"],
     ["graph.facebook.com", "host de provider"],
+    // Quarto provider — token composto de propósito, ver comentário no
+    // pattern sobre a colisão com o Painel de Evolução do harness de IA.
+    ["evolution_api", "quarto provider do vocabulário"],
+    ["EVOLUTION_API_KEY", "env var do quarto provider"],
+    ["EVOLUTION_API_BASE_URL", "env var do quarto provider"],
+    ["getAdapter(\"evolution_api\")", "literal de provider vazando numa feature"],
   ])("reconhece %s (%s)", (texto) => {
     expect(nomeiaProvider(texto)).toBe(true);
   });
@@ -62,6 +68,16 @@ describe("fronteira do padrão de nome de provider", () => {
     ["Wahalla", "idem, em PascalCase — `Waha` seguido de minúscula não é segmento"],
     ["metacloud", "sem o separador, não é o termo do vocabulário"],
     ["graphxfacebookxcom", "o ponto do host é literal, não coringa"],
+    // A colisão que decidiu o nome do quarto provider: `evolution` sozinho
+    // JÁ NOMEIA uma feature sem relação nenhuma com canal (o Painel de
+    // Evolução do harness de IA, `app/app/ai/evolution/`). Se algum destes
+    // virar `true`, o lint reprova aquela feature inteira por engano.
+    ["evolution", "palavra comum a uma feature não relacionada — não é provider sozinha"],
+    ["EVOLUTION", "idem, em caixa alta"],
+    ["EvolutionClient", "identificador PascalCase de OUTRA feature (Painel de Evolução)"],
+    ["EvolutionPage", "idem"],
+    ["import { x } from '@/lib/ai/evolution/aggregate'", "caminho real da feature não relacionada"],
+    ["evolution_instance_name", "coluna do transporte — não é o token do provider (`evolution_api`)"],
   ])("NÃO reconhece %s (%s)", (texto) => {
     expect(nomeiaProvider(texto)).toBe(false);
   });

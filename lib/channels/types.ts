@@ -8,7 +8,7 @@ import type { OutboundMedia } from "@/lib/waha/media-send";
 
 export type { OutboundMedia };
 
-export type ChannelProvider = "waha" | "meta_cloud" | "zernio";
+export type ChannelProvider = "waha" | "meta_cloud" | "zernio" | "evolution_api";
 
 export interface ChannelCapabilities {
   /** Pode enviar texto livre a qualquer momento? false = exige template fora da janela. */
@@ -164,6 +164,54 @@ export interface ChannelAdapter {
    * conhece `contract_hash` — isso é de quem sincroniza.
    */
   templates?: ChannelTemplateOps;
+
+  /**
+   * Inicia o pareamento de UMA sessão nova no transporte (cria a sessão/
+   * instância do lado do provider, e — se o provider precisar — registra o
+   * webhook desta instalação nela). Espelha o que a rota
+   * `POST /api/v1/channel-sessions` fazia hardcoded só para WAHA — generalizado
+   * aqui para qualquer canal que pareia por QR code.
+   *
+   * `webhookPathToken`: o token opaco desta sessão (`channel_sessions.
+   * webhook_path_token`), para o provider que precisa se autoconfigurar montar
+   * a URL de callback. Provider que não precisa (o outro já é apontado via
+   * config do container, fora do app) ignora o campo.
+   *
+   * OPCIONAL: um canal sem pareamento por QR (meta_cloud, zernio — credencial
+   * colada, não escaneada) não implementa. Quem chama testa a presença do
+   * método, nunca pergunta QUAL provider é.
+   */
+  startPairing?(input: {
+    sessionRef: string;
+    webhookPathToken: string;
+  }): Promise<{ ok: boolean }>;
+
+  /**
+   * Devolve a imagem do QR code de pareamento de uma sessão, ou o estado atual
+   * quando não há imagem pra mostrar. Espelha o que
+   * `GET /api/v1/channel-sessions/[id]/qr` fazia hardcoded só para WAHA.
+   *
+   * `not_ready` = sessão existe mas o QR ainda não ficou pronto (poll de novo).
+   * `already_connected` = pareamento já concluído, não há QR a mostrar.
+   * `unavailable` = transporte não configurado/fora do ar.
+   */
+  getQrCode?(input: {
+    sessionRef: string;
+  }): Promise<
+    | { image: Buffer; contentType: string }
+    | { status: "not_ready" | "already_connected" | "unavailable" }
+  >;
+
+  /**
+   * Checagem AO VIVO de status/telefone contra o transporte (não o que está no
+   * DB). Espelha o que `GET /api/v1/channel-sessions/[id]` fazia hardcoded só
+   * para WAHA. `status: null` = não deu para confirmar agora (erro
+   * transitório); quem chama mantém o status do DB nesse caso, mas ainda
+   * carimba a tentativa.
+   */
+  checkLiveStatus?(input: {
+    sessionRef: string;
+  }): Promise<{ status: string | null; phoneNumber: string | null }>;
 }
 
 /** Definição aprovada, na forma NEUTRA — sem o vocabulário de nenhum provider. */

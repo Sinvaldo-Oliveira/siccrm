@@ -8444,22 +8444,10 @@ alter table public.channel_sessions alter column waha_session_name drop not null
 alter table public.channel_sessions
   add column if not exists zernio_account_id text;
 
-alter table public.channel_sessions
-  drop constraint if exists channel_sessions_provider_check;
-
-alter table public.channel_sessions
-  add constraint channel_sessions_provider_check
-  check (provider = any (array['waha'::text, 'meta_cloud'::text, 'zernio'::text]));
-
-alter table public.channel_sessions
-  drop constraint if exists channel_sessions_provider_ref_check;
-
-alter table public.channel_sessions
-  add constraint channel_sessions_provider_ref_check check (
-    (provider = 'waha'       and waha_session_name    is not null) or
-    (provider = 'meta_cloud' and meta_phone_number_id is not null) or
-    (provider = 'zernio'     and zernio_account_id    is not null)
-  );
+-- (constraints channel_sessions_provider_check e channel_sessions_provider_ref_check:
+--  o bloco definitivo, com o vocabulário FINAL, está mais abaixo — migration
+--  0142. Regra de `tests/unit/baseline-constraint-reconstruida.test.ts`: cada
+--  constraint aparece uma vez só no arquivo.)
 
 comment on column public.channel_sessions.zernio_account_id is
   'Identificador da conta conectada NO INTERMEDIÁRIO (accountId), não o phone_number_id da Meta. É o que endereça envio e webhook. Espelhado em lib/channels/session-ref.ts.';
@@ -8493,6 +8481,43 @@ alter table public.channel_sessions
 
 comment on column public.channel_sessions.zernio_token_encrypted is
   'API key do intermediário, cifrada por fn_encrypt_oauth. Por SESSÃO (não por instalação) — mesma decisão da 0087 para o canal oficial.';
+
+-- ---- vocabulário do quarto canal (migration 0142) ----
+-- Espelho idempotente da 0142. Racional completo no arquivo da migration; o
+-- que importa aqui é que este é o bloco DEFINITIVO das duas constraints —
+-- substitui o `-- (constraints ...)` comentado lá em cima (versão de dois
+-- providers) e o bloco de três providers que a 0131 tinha recriado aqui antes.
+-- Regra de `tests/unit/baseline-constraint-reconstruida.test.ts`: cada
+-- constraint aparece uma vez só no arquivo — este é o único `add constraint`
+-- de cada uma.
+--
+-- Evolution é BYO self-hosted de UMA instalação inteira (mesma decisão do
+-- WAHA: env `EVOLUTION_API_BASE_URL`/`EVOLUTION_API_KEY`, não credencial por
+-- sessão) — por isso não ganha coluna `_token_encrypted` como o BSP
+-- intermediário da 0132.
+alter table public.channel_sessions
+  add column if not exists evolution_instance_name text;
+
+alter table public.channel_sessions
+  drop constraint if exists channel_sessions_provider_check;
+
+alter table public.channel_sessions
+  add constraint channel_sessions_provider_check
+  check (provider = any (array['waha'::text, 'meta_cloud'::text, 'zernio'::text, 'evolution_api'::text]));
+
+alter table public.channel_sessions
+  drop constraint if exists channel_sessions_provider_ref_check;
+
+alter table public.channel_sessions
+  add constraint channel_sessions_provider_ref_check check (
+    (provider = 'waha'         and waha_session_name       is not null) or
+    (provider = 'meta_cloud'   and meta_phone_number_id    is not null) or
+    (provider = 'zernio'       and zernio_account_id       is not null) or
+    (provider = 'evolution_api' and evolution_instance_name is not null)
+  );
+
+comment on column public.channel_sessions.evolution_instance_name is
+  'Nome da instância na Evolution API (gateway self-hosted, BYO por instalação via EVOLUTION_API_BASE_URL/EVOLUTION_API_KEY). Análogo a waha_session_name, provider diferente. Espelhado em lib/channels/session-ref.ts.';
 
 comment on column public.channel_sessions.provider is
   'Canal desta sessão. Vocabulário espelhado em lib/channels/types.ts → ChannelProvider (cobrado por tests/invariants/vocabulario-banco-x-typescript.test.ts).';

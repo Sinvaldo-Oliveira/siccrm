@@ -79,4 +79,48 @@ export const wahaAdapter: ChannelAdapter = {
 
     return { externalId: parseWahaMessageId(res) };
   },
+
+  // O container do WAHA já é apontado pra esta instalação via
+  // `WAHA_WEBHOOK_BASE_URL` (env do container, fora do app) — não precisa que
+  // o app registre webhook por sessão, então `webhookPathToken` é ignorado.
+  async startPairing(input: { sessionRef: string }): Promise<{ ok: boolean }> {
+    const client = getWahaClient();
+    if (!client) return { ok: false };
+    await client.startSession(input.sessionRef);
+    return { ok: true };
+  },
+
+  async getQrCode(input: { sessionRef: string }) {
+    const client = getWahaClient();
+    if (!client) return { status: "unavailable" as const };
+
+    const result = await client.getQrImage(input.sessionRef);
+    if (!result) return { status: "not_ready" as const };
+    return { image: result.buffer, contentType: result.contentType };
+  },
+
+  // Mesma chamada e mesma leitura que `app/api/v1/channel-sessions/[id]/route.ts`
+  // fazia hardcoded — só movida para trás do seam.
+  async checkLiveStatus(input: { sessionRef: string }) {
+    const client = getWahaClient();
+    if (!client) return { status: null, phoneNumber: null };
+    try {
+      const remote = (await client.getSessionQr(input.sessionRef)) as {
+        status?: string;
+        me?: { id?: string; pushName?: string };
+      };
+      const jid = remote.me?.id;
+      return {
+        status: remote.status ?? null,
+        phoneNumber: jid ? jid.replace(/@.*/, "") : null,
+      };
+    } catch (err) {
+      // 404 no WAHA = sessão não iniciada lá → considera STOPPED. Qualquer
+      // outro erro: status null, quem chama mantém o que está no DB (não
+      // sobrescreve com ruído transitório).
+      const msg = err instanceof Error ? err.message : String(err);
+      if (msg.includes("404")) return { status: "STOPPED", phoneNumber: null };
+      return { status: null, phoneNumber: null };
+    }
+  },
 };

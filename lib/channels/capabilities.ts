@@ -69,6 +69,28 @@ export const CHANNEL_CAPABILITIES: Record<ChannelProvider, ChannelCapabilities> 
     groups: "limited",
     costPerMessage: true,
   },
+  // Mesma física do WAHA: gateway self-hosted não-oficial (WhatsApp Web/
+  // Baileys), sem WABA nem intermediário por trás — auto-restrição, não
+  // hetero-restrição. NÃO HÁ ainda medição contra uma instância real (a
+  // implementação inicial partiu do perfil do WAHA por semelhança
+  // arquitetural); `voiceNote` precisa ser confirmado contra a API de verdade
+  // antes de declarar esta capability como medida — ver
+  // docs/doctrine/restricao-de-canal.md sobre nunca assumir.
+  //
+  // `groups: "none"` é HONESTO com o adapter, não uma medição: o formato de
+  // endereço de grupo da Evolution ainda não foi confirmado, então
+  // `evolutionAdapter.resolveRecipient` recusa grupo (devolve null) até
+  // alguém medir contra a API real e destravar os dois juntos.
+  evolution_api: {
+    freeformOutsideWindow: true,
+    requiresTemplates: false,
+    canManageTemplates: false,
+    banRisk: true,
+    minIntervalMs: null,
+    voiceNote: "server-convert",
+    groups: "none",
+    costPerMessage: false,
+  },
 };
 
 /**
@@ -90,6 +112,7 @@ export const DEFAULT_CHANNEL_PROVIDER: ChannelProvider = "waha";
 export const CHANNEL_PROVIDER_WAHA: ChannelProvider = "waha";
 export const CHANNEL_PROVIDER_META: ChannelProvider = "meta_cloud";
 export const CHANNEL_PROVIDER_ZERNIO: ChannelProvider = "zernio";
+export const CHANNEL_PROVIDER_EVOLUTION: ChannelProvider = "evolution_api";
 
 export function capabilitiesOf(provider: ChannelProvider): ChannelCapabilities {
   const caps = CHANNEL_CAPABILITIES[provider];
